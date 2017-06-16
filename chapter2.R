@@ -149,35 +149,3 @@ tidy_books %>%
   filter(chapter != 0) %>%
   top_n(1) %>%
   ungroup()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
