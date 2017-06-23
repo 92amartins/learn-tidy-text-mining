@@ -1,5 +1,7 @@
 library(dplyr)
+library(stringr)
 library(janeaustenr)
+library(gutenbergr)
 library(tidytext)
 library(ggplot2)
 
@@ -51,3 +53,114 @@ freq_by_rank %>%
   geom_line(size = 1.2, alpha = 0.8) +
   scale_x_log10() + 
   scale_y_log10()
+
+# Calculate tf-idf
+book_words <- book_words %>%
+  bind_tf_idf(word, book, n) %>%
+  arrange(desc(tf_idf))
+book_words
+
+# Plot tf-idf
+plot_austen <- book_words %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word))))
+
+plot_austen %>%
+  top_n(20) %>%
+  ggplot(aes(word, tf_idf, fill = book)) +
+  geom_col() +
+  labs(x = NULL, y = "tf-idf") +
+  coord_flip()
+
+# Looking at each book individually
+plot_austen %>%
+  group_by(book) %>%
+  top_n(15) %>%
+  ungroup %>%
+  ggplot(aes(word, tf_idf, fill = book)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~book, ncol = 2, scales = "free") +
+  coord_flip()
+
+## Physics texts
+physics <- gutenberg_download(c(37729, 14725, 13476, 5001),
+                              meta_fields = "author")
+
+# Counting words
+physics_words <- physics %>%
+  unnest_tokens(word, text) %>%
+  count(author, word, sort = TRUE) %>%
+  ungroup()
+
+physics_words
+
+# Calculate tf-idf
+physics_words <- physics_words %>%
+  bind_tf_idf(word,author,n)
+
+physics_words
+
+plot_physics <- physics_words %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  mutate(author = factor(author, levels = c("Galilei, Galileo",
+                                            "Huygens, Christiaan",
+                                            "Tesla, Nikola",
+                                            "Einstein, Albert")))
+
+plot_physics %>%
+  top_n(20) %>%
+  ggplot(aes(word, tf_idf, fill = author)) +
+  geom_col() +
+  labs(x = NULL, y = "tf-idf") +
+  coord_flip()
+
+# Inspect individually
+plot_physics %>%
+  group_by(author) %>%
+  top_n(15, tf_idf) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, tf_idf)) %>%
+  ggplot(aes(word, tf_idf, fill = author)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~author, ncol = 2, scales = "free") +
+  coord_flip()
+
+# What is eq in Einstein's text?
+physics %>%
+  filter(str_detect(text, "eq\\.")) %>%
+  select(text)
+
+# What about "K1"?
+physics %>%
+  filter(str_detect(text, "K1")) %>%
+  select(text)
+
+# What is ac, rc, cm, cg in Huygens'?
+physics %>%
+  filter(str_detect(text, "AK")) %>%
+  select(text)
+
+# Remove "noise" with a custom stoplist and plot again
+mystopwords <- data_frame(word = c("eq", "co", "rc", "ac", "ak", "bn",
+                                   "fig", "file", "cg", "cb", "cm"))
+physics_words <- anti_join(physics_words, mystopwords, by = "word")
+plot_physics <- physics_words %>%
+  arrange(desc(tf_idf)) %>%
+  mutate(word = factor(word, levels = rev(unique(word)))) %>%
+  group_by(author) %>%
+  top_n(15, tf_idf) %>%
+  ungroup() %>%
+  mutate(author = factor(author, levels = c("Galilei, Galileo",
+                                            "Huygens, Christiaan",
+                                            "Tesla, Nikola",
+                                            "Einstein, Albert")))
+
+plot_physics %>%
+  ggplot(aes(word, tf_idf, fill = author)) +
+  geom_col(show.legend = FALSE) +
+  labs(x = NULL, y = "tf-idf") +
+  facet_wrap(~author, ncol = 2, scales = "free") +
+  coord_flip()
