@@ -1,6 +1,10 @@
 library(dplyr)
 library(ggplot2)
+library(ggraph)
+library(igraph)
 library(janeaustenr)
+library(gutenbergr)
+library(stringr)
 library(tidyr)
 library(tidytext)
 
@@ -102,7 +106,6 @@ negated_words <- bigrams_separated %>%
   ungroup()
 
 # Plot contribution by preceded negative word
-# FIX THAT (SHOULD LOOK LIKE Figure 4.3)
 negated_words %>%
   mutate(contribution = n * score) %>%
   arrange(desc(abs(contribution))) %>%
@@ -114,29 +117,68 @@ negated_words %>%
   ylab("Sentiment score * # of occurrences") +
   facet_wrap(~word1, scales = "free_y") +
   coord_flip()
+
+## Graph visualization
+
+# Filter only relatively common combinations
+bigram_graph <- bigram_counts %>%
+  filter(n > 20) %>%
+  graph_from_data_frame()
+
+# Plot graph
+set.seed(2017)
+
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+
+# Further graph formatting
+set.seed(2016)
+
+a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+
+ggraph(bigram_graph, layout = "fr") +
+  geom_edge_link(aes(edge_alpha = n), show.legend = FALSE,
+                 arrow = a, end_cap = circle(.07, 'inches')) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+  theme_void()
+
+
+# Graphs for gutenbergr texts
+
+count_bigrams <- function(dataset){
+  dataset %>%
+    unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+    separate(bigram, c("word1", "word2"), sep = " ") %>%
+    filter(!word1 %in% stop_words$word,
+           !word2 %in% stop_words$word) %>%
+    count(word1, word2, sort = TRUE)
+}
+
+visualize_bigrams <- function(bigrams) {
+  set.seed(2016)
+  a <- grid::arrow(type = "closed", length = unit(.15, "inches"))
   
+  bigrams %>%
+    graph_from_data_frame() %>%
+    ggraph(layout = "fr") +
+    geom_edge_link(aes(edge_alpha = n), show.legend = FALSE, arrow = a) +
+    geom_node_point(color = "lightblue", size = 5) +
+    geom_node_text(aes(label = name), vjust = 1, hjust = 1) +
+    theme_void()
+}
 
+# King James version of the Bible
+kjv <- gutenberg_download(10)
 
+kjv_bigrams <- kjv %>%
+  count_bigrams()
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Filter out rare combinations, as well as digits
+kjv_bigrams %>%
+  filter(n > 40,
+         !str_detect(word1, "\\d"),
+         !str_detect(word2, "\\d")) %>%
+  visualize_bigrams()
