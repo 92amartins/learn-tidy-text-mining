@@ -1,7 +1,9 @@
 library(dplyr)
+library(ggplot2)
+library(janeaustenr)
 library(tidyr)
 library(tidytext)
-library(janeaustenr)
+
 
 # Find bigram
 austen_bigrams <- austen_books() %>%
@@ -63,4 +65,78 @@ bigram_tf_idf %>%
   labs(x = NULL, y = "tf-idf") +
   facet_wrap(~book, ncol = 2, scales = "free") +
   coord_flip()
+
+# Bigrams to provide context in sentiment analysis
+bigrams_separated %>%
+  filter(word1 == "not") %>%
+  count(word1, word2, sort = TRUE)
+
+AFINN <- get_sentiments("afinn")
+
+# Most frequent words preceded by "not"
+not_words <- bigrams_separated %>%
+  filter(word1 == "not") %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word2, score, sort = TRUE) %>%
+  ungroup()
+
+# Contributions to wrong direction - barplots
+not_words %>%
+  mutate(contribution = n * score) %>%
+  arrange(desc(abs(contribution))) %>%
+  head(20) %>%
+  mutate(word2 = reorder(word2, contribution)) %>%
+  ggplot(aes(word2, n * score, fill = n * score > 0)) +
+  geom_col(show.legend = FALSE) +
+  xlab("Words preceded by \"not\"") +
+  ylab("Sentiment score * number of occurrences") +
+  coord_flip()
+
+# Most frequent words preceded by negative words
+negation_words <- c("not", "no", "never", "without")
+
+negated_words <- bigrams_separated %>%
+  filter(word1 %in% negation_words) %>%
+  inner_join(AFINN, by = c(word2 = "word")) %>%
+  count(word1, word2, score, sort = TRUE) %>%
+  ungroup()
+
+# Plot contribution by preceded negative word
+# FIX THAT (SHOULD LOOK LIKE Figure 4.3)
+negated_words %>%
+  mutate(contribution = n * score) %>%
+  arrange(desc(abs(contribution))) %>%
+  head(20) %>%
+  mutate(word2 = reorder(word2, contribution)) %>%
+  ggplot(aes(word2, n * score, fill = n * score > 0)) +
+  geom_col(show.legend = FALSE) +
+  xlab("Words preceded by negation term") +
+  ylab("Sentiment score * # of occurrences") +
+  facet_wrap(~word1, scales = "free_y") +
+  coord_flip()
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
