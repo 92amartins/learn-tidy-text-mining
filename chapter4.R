@@ -7,6 +7,7 @@ library(gutenbergr)
 library(stringr)
 library(tidyr)
 library(tidytext)
+library(widyr)
 
 
 # Find bigram
@@ -182,3 +183,59 @@ kjv_bigrams %>%
          !str_detect(word1, "\\d"),
          !str_detect(word2, "\\d")) %>%
   visualize_bigrams()
+
+## Counting and correlating pairs of words
+austen_section_words <- austen_books() %>%
+  filter(book == "Pride & Prejudice") %>%
+  mutate(section = row_number() %/% 10) %>%
+  filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word)
+
+# Counts words co-occuring within sections
+word_pairs <- austen_section_words %>%
+  pairwise_count(word, section, sort = TRUE)
+
+word_pairs
+
+# Words that co-occur with Darcy
+word_pairs %>%
+  filter(item1 == "darcy")
+
+## Pairwise correlation
+
+# Calculate phi coefficient (equivalent to Pearson for binary)
+word_cors <- austen_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 20) %>% # we need to filter for at least relatively common words
+  pairwise_cor(word, section, sort = TRUE)
+
+word_cors
+
+# What are the most correlated words with "pounds"?
+word_cors %>%
+  filter(item1 == "pounds")
+  
+# Find words correlated to particular words
+word_cors %>%
+  filter(item1 %in% c("elizabeth", "pounds", "married", "pride")) %>%
+  group_by(item1) %>%
+  top_n(6) %>%
+  ungroup() %>%
+  mutate(item2 = reorder(item2, correlation)) %>%
+  ggplot(aes(item2, correlation)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~item1, scales = "free") +
+  coord_flip()
+
+# Visualize as a graph
+set.seed(2016)
+
+word_cors %>%
+  filter(correlation > .15) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
