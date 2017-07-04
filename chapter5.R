@@ -1,5 +1,6 @@
 library(dplyr)
 library(ggplot2)
+library(janeaustenr)
 library(methods)
 library(quanteda)
 library(tidyr)
@@ -93,42 +94,25 @@ year_term_counts %>%
   scale_y_continuous(labels = scales::percent_format()) +
   ylab("% frequency of word in inaugural address")
 
+# Cast AP news back into a dtm
+ap_td %>%
+  cast_dtm(document, term, count)
 
+# Cast AP news into a dfm
+ap_td %>%
+  cast_dfm(term, document, count)
 
+# Cast a sparse matrix
+m <- ap_td %>%
+  cast_sparse(document, term, count)
 
+class(m)
+dim(m)
 
+# DTM from Jane Austen's books
+austen_dtm <- austen_books() %>%
+  unnest_tokens(word, text) %>%
+  count(book, word) %>%
+  cast_dtm(book, word, n)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
-
-  
-  
+austen_dtm
