@@ -2,10 +2,13 @@ library(dplyr)
 library(ggplot2)
 library(janeaustenr)
 library(methods)
+library(purrr)
 library(quanteda)
+library(stringr)
 library(tidyr)
 library(tidytext)
 library(tm)
+library(tm.plugin.webmining)
 
 data("AssociatedPress", package = "topicmodels")
 
@@ -138,8 +141,96 @@ acq_tokens <- acq_td %>%
 acq_tokens %>%
   count(word, sort = TRUE)
 
-# tf-idf
+# Tf-idf
 acq_tokens %>%
   count(id, word) %>%
   bind_tf_idf(word, id, n) %>%
   arrange(desc(tf_idf))
+
+# Mining financial articles
+company <- c("Microsoft", "Apple", "Google", "Amazon", "Facebook",
+             "Netflix")
+symbol <- c("MSFT", "AAPL", "GOOG", "AMZN", "FB", "NFLX")
+
+download_articles <- function(symbol){
+  WebCorpus(GoogleFinanceSource(paste0("NASDAQ:", symbol)))
+}
+
+stock_articles <- data_frame(company = company,
+                             symbol = symbol) %>%
+  mutate(corpus = map(symbol, download_articles))
+
+stock_articles
+
+# Tokenize articles
+stock_tokens <- stock_articles %>%
+  unnest(map(corpus, tidy)) %>%
+  unnest_tokens(word, text) %>%
+  select(company, datetimestamp, word, id, heading)
+
+stock_tokens
+
+# Tf-idf
+stock_tf_idf <- stock_tokens %>%
+  count(company, word) %>%
+  filter(!str_detect(word, "\\d+")) %>%
+  bind_tf_idf(word, company, n) %>%
+  arrange(-tf_idf)
+
+# Plot top-words by company
+stock_tf_idf %>%
+  group_by(company) %>%
+  top_n(8, tf_idf) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, tf_idf)) %>%
+  ggplot(aes(word, tf_idf, fill = company)) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~company, scales = "free") +
+  coord_flip()
+
+# Word's sentiment score
+stock_tokens %>%
+  anti_join(stop_words, by = "word") %>%
+  count(word, id, sort = TRUE) %>%
+  inner_join(get_sentiments("afinn"), by = "word") %>%
+  group_by(word) %>%
+  summarize(contribution = sum(n * score)) %>%
+  top_n(12, abs(contribution)) %>%
+  mutate(word = reorder(word, contribution)) %>%
+  ggplot(aes(word, contribution)) +
+  geom_col() +
+  coord_flip() +
+  labs(y = "Frequency of word * AFINN score")
+
+##AFINN et al don't seem to fit financial data. Try loughran instead
+# Most common words belonging to each sentiment
+stock_tokens %>%
+  count(word) %>%
+  inner_join(get_sentiments("loughran"), by = "word") %>%
+  group_by(sentiment) %>%
+  top_n(5, n) %>%
+  ungroup() %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  coord_flip() +
+  facet_wrap(~sentiment, scales = "free") +
+  ylab("Frequency of this word in the recent financial articles")
+
+# Company x Sentiment scores
+stock_sentiment_count <- stock_tokens %>%
+  inner_join(get_sentiments("loughran"), by = "word") %>%
+  count(sentiment, company) %>%
+  spread(sentiment, n, fill = 0)
+
+stock_sentiment_count
+
+# Positivity of each company
+stock_sentiment_count %>%
+  mutate(score = (positive - negative) / (positive + negative)) %>%
+  mutate(company = reorder(company, score)) %>%
+  ggplot(aes(company, score, fill = score > 0)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(x = "Company",
+       y = "Positivity score among 20 recent news articles")
