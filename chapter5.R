@@ -116,3 +116,30 @@ austen_dtm <- austen_books() %>%
   cast_dtm(book, word, n)
 
 austen_dtm
+
+# Tidying corpus objects with metadata
+data("acq")
+acq
+
+# first document
+acq[[1]]
+
+# Tidying corpus
+acq_td <- tidy(acq)
+acq_td
+
+# Tokenize
+acq_tokens <- acq_td %>%
+  select(-places) %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by = "word")
+
+# Most common words
+acq_tokens %>%
+  count(word, sort = TRUE)
+
+# tf-idf
+acq_tokens %>%
+  count(id, word) %>%
+  bind_tf_idf(word, id, n) %>%
+  arrange(desc(tf_idf))
