@@ -48,3 +48,12 @@ beta_spread %>%
   ggplot(aes(term, log_ratio)) +
   geom_col() +
   coord_flip()
+
+## Document-topic probabilities
+ap_documents <- tidy(ap_lda, matrix = "gamma")
+ap_documents
+
+# Document 6 seen to come from topic 2 almost exclusively. Check that
+tidy(AssociatedPress) %>%
+  filter(document == 6) %>%
+  arrange(desc(count))
