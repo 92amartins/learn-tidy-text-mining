@@ -155,3 +155,44 @@ book_topics <- chapter_classifications %>%
 chapter_classifications %>%
   inner_join(book_topics, by = "topic") %>%
   filter(title != consensus)
+
+## By word assignments
+assignments <- augment(chapters_lda, data = chapters_dtm)
+assignments
+
+# Find words  incorrectly classified
+assignments <- assignments %>%
+  separate(document, c("title","chapter"), sep = "_", convert = TRUE) %>%
+  inner_join(book_topics, by = c(".topic" = "topic"))
+
+assignments
+
+# Confusion matrix
+assignments %>%
+  count(title, consensus, wt = count) %>%
+  group_by(title) %>%
+  mutate(percent = n / sum(n)) %>%
+  ggplot(aes(consensus, title, fill = percent)) +
+  geom_tile() +
+  scale_fill_gradient2(high = "red", label = percent_format()) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1),
+        panel.grid = element_blank()) +
+  labs(x = "Book words were assigned to",
+       y = "Book words came from",
+       fill = "% of assignments")
+
+# Most commonly mistaken words
+wrong_words <- assignments %>%
+  filter(title != consensus)
+
+wrong_words
+
+wrong_words %>%
+  count(title, consensus, term, wt = count) %>%
+  ungroup() %>%
+  arrange(desc(n))
+
+# Checking word "flopson" occurences
+word_counts %>%
+  filter(word == "flopson")
