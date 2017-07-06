@@ -1,6 +1,7 @@
 library(dplyr)
 library(ggplot2)
 library(gutenbergr)
+library(mallet)
 library(stringr)
 library(tidyr)
 library(tidytext)
@@ -196,3 +197,30 @@ wrong_words %>%
 # Checking word "flopson" occurences
 word_counts %>%
   filter(word == "flopson")
+
+## Alternative LDA implementations (mallet)
+
+# Create a vector with one string per chapter
+collapsed <- by_chapter_word %>%
+  anti_join(stop_words, by = "word") %>%
+  mutate(word = str_replace(word, "'", "")) %>%
+  group_by(document) %>%
+  summarize(text = paste(word, collapse = " "))
+
+# Create an empty file of "stopwords"
+file.create(empty_file <- tempfile())
+docs <- mallet.import(collapsed$document, collapsed$text, empty_file)
+
+mallet_model <- MalletLDA(num.topics = 4)
+mallet_model$loadDocuments(docs)
+mallet_model$train(100)
+  
+# Word-topic pairs
+tidy(mallet_model)
+
+# Document-topic pairs
+tidy(mallet_model, matrix = "gamma")
+
+# column needs to be named "term" for "augment"
+term_counts <- rename(word_counts, term = word)
+augment(mallet_model, term_counts)
